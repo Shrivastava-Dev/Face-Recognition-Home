@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 database/known_faces.pkl
+database/activity_log.json
 *.mp3
 .vscode/
 models/*.caffemodel

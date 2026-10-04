@@ -2,56 +2,54 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from rag_system import HomeRAGSystem
-from logger import load_logs
 
 load_dotenv()
 
+TESTING_MODE = True
+
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# ---------- RAG SYSTEM INITIALIZATION ----------
+# ---------- APPLIANCE STATE TRACKING ----------
+appliance_state = {
+    "light": False,  # False = OFF, True = ON
+    "fan": False,
+}
 
-rag_system = HomeRAGSystem()
-rag_system.build_index_from_logs(load_logs())
-
-# ---------- HARDWARE FUNCTIONS ----------
+# ---------- HARDWARE FUNCTIONS (Now State-Aware) ----------
 
 def turn_on_light():
     """Turns on the light"""
+    if appliance_state["light"]:
+        return "Light is already on"
+    appliance_state["light"] = True
     print("[HARDWARE]: Light turned ON")
     return "Light turned on"
 
 def turn_off_light():
     """Turns off the light"""
+    if not appliance_state["light"]:
+        return "Light is already off"
+    appliance_state["light"] = False
     print("[HARDWARE]: Light turned OFF")
     return "Light turned off"
 
 def turn_on_fan():
     """Turns on the fan"""
+    if appliance_state["fan"]:
+        return "Fan is already on"
+    appliance_state["fan"] = True
     print("[HARDWARE]: Fan turned ON")
     return "Fan turned on"
 
 def turn_off_fan():
     """Turns off the fan"""
+    if not appliance_state["fan"]:
+        return "Fan is already off"
+    appliance_state["fan"] = False
     print("[HARDWARE]: Fan turned OFF")
     return "Fan turned off"
 
-# ---------- RAG TOOL FUNCTION ----------
-
-def query_home_history(question: str) -> str:
-    """
-    Use this function when the user asks about PAST events, history, 
-    or questions like 'who came home', 'when did someone arrive', 
-    'who registered recently', etc.
-    """
-    results = rag_system.retrieve_relevant_logs(question, k=3, max_distance=1.5)
-    if not results:
-        return "No relevant historical records found for that question."
-    
-    context = "\n".join([text for text, dist in results])
-    return f"Relevant historical records:\n{context}"
-
-# ---------- SIMPLE RULE-BASED CHECK (Instant, No API) ----------
+# ---------- SIMPLE RULE-BASED CHECK ----------
 
 def try_simple_match(command):
     command = command.lower()
@@ -72,10 +70,8 @@ def try_simple_match(command):
 chat = client.chats.create(
     model="gemini-3.5-flash",
     config=types.GenerateContentConfig(
-        tools=[turn_on_light, turn_off_light, turn_on_fan, turn_off_fan, query_home_history],
-        system_instruction="""You are a brief, friendly smart home assistant. 
-        Use query_home_history when asked about past events, who visited, 
-        or registration history. Keep responses conversational and concise."""
+        tools=[turn_on_light, turn_off_light, turn_on_fan, turn_off_fan],
+        system_instruction="You are a brief, friendly smart home assistant."
     )
 )
 
@@ -84,8 +80,14 @@ chat = client.chats.create(
 def process_command(command):
     simple_result = try_simple_match(command)
     if simple_result:
+        print("[ROUTING] Handled by: RULE-BASED (no API call)")
         return simple_result
     
+    if TESTING_MODE:
+        print(f"[MOCK MODE] Would send to Gemini: '{command}'")
+        return f"(Mock response) I heard you say: {command}"
+    
+    print("[ROUTING] Handled by: GEMINI API")
     try:
         response = chat.send_message(command)
         return response.text
@@ -96,6 +98,8 @@ def process_command(command):
 # ---------- TEST ----------
 
 if __name__ == "__main__":
-    print(process_command("turn on the light"))
-    print(process_command("who came home today?"))
-    print(process_command("did anyone new register?"))
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() == "quit":
+            break
+        print(f"Agent: {process_command(user_input)}")
