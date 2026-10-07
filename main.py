@@ -41,7 +41,6 @@ NEW_USER_PHRASES = [
 RETRY_PHRASES = [
     "Sorry, I didn't catch that. Please repeat?",
     "Hmm, could you say that again?",
-    "I didn't quite get that, please repeat.",
 ]
 
 def speak(text, audio_lock=None):
